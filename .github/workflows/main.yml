@@ -1,4 +1,4 @@
-name: Build All Platforms
+name: Build & Release All Platforms
 
 on:
   workflow_dispatch:
@@ -22,80 +22,20 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - goos: android
+          - goos: linux
+            goarch: amd64
+          - goos: linux
             goarch: arm64
+          - goos: linux
+            goarch: 386
+          - goos: windows
+            goarch: amd64
+            ext: ".exe"
           - goos: darwin
             goarch: amd64
           - goos: darwin
             goarch: arm64
-          - goos: dragonfly
-            goarch: amd64
-          - goos: freebsd
-            goarch: 386
-          - goos: freebsd
-            goarch: amd64
-          - goos: freebsd
-            goarch: arm
-          - goos: freebsd
-            goarch: arm64
-          - goos: linux
-            goarch: 386
-          - goos: linux
-            goarch: amd64
-          - goos: linux
-            goarch: arm
-          - goos: linux
-            goarch: arm64
-          - goos: linux
-            goarch: mips
-          - goos: linux
-            goarch: mips64
-          - goos: linux
-            goarch: mips64le
-          - goos: linux
-            goarch: mipsle
-          - goos: linux
-            goarch: ppc64
-          - goos: linux
-            goarch: ppc64le
-          - goos: linux
-            goarch: riscv64
-          - goos: linux
-            goarch: s390x
-          - goos: netbsd
-            goarch: 386
-          - goos: netbsd
-            goarch: amd64
-          - goos: netbsd
-            goarch: arm
-          - goos: netbsd
-            goarch: arm64
-          - goos: openbsd
-            goarch: 386
-          - goos: openbsd
-            goarch: amd64
-          - goos: openbsd
-            goarch: arm
-          - goos: openbsd
-            goarch: arm64
-          - goos: plan9
-            goarch: 386
-          - goos: plan9
-            goarch: amd64
-          - goos: solaris
-            goarch: amd64
-          - goos: windows
-            goarch: 386
-            ext: ".exe"
-          - goos: windows
-            goarch: amd64
-            ext: ".exe"
-          - goos: windows
-            goarch: arm
-            ext: ".exe"
-          - goos: windows
-            goarch: arm64
-            ext: ".exe"
+          # 如需完整平台可恢复上个版本的 matrix
 
     outputs:
       build_time: ${{ steps.set-build-time.outputs.BUILD_TIME }}
@@ -123,7 +63,7 @@ jobs:
 
       - name: Build (Static Binary)
         run: |
-          echo "Building iptest-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext || '' }} (static binary)..."
+          echo "Building iptest-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext || '' }}..."
           CGO_ENABLED=0 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} \
           go build -trimpath -ldflags="-s -w" \
           -o "${{ github.workspace }}/release_assets/iptest-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext || '' }}" iptest.go
@@ -138,48 +78,58 @@ jobs:
           echo "SHA256 files generated:"
           ls -1 *.sha256
 
-      - name: Upload Artifact
+      - name: Compress Artifacts
+        run: |
+          cd "${{ github.workspace }}/release_assets"
+          for file in $(find . -type f ! -name '*.sha256'); do
+            base=$(basename "$file")
+            if [[ "$base" == *.exe ]]; then
+              zip "${base%.exe}.zip" "$file"
+            else
+              tar -czf "${base}.tar.gz" "$file"
+            fi
+          done
+
+      - name: Upload All Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: iptest-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext || '' }}
+          name: iptest-all-platforms
           path: ${{ github.workspace }}/release_assets/*
 
   release:
-    name: Release
+    name: Publish to GitHub Releases
     needs: build
     runs-on: ubuntu-latest
+
     steps:
       - name: Download Artifacts
         uses: actions/download-artifact@v4
         with:
-          path: artifacts
+          name: iptest-all-platforms
+          path: release_assets
 
-      - name: Move Release Assets
-        run: |
-          mkdir -p release_assets
-          find artifacts -type f ! -name "*.txt" -exec mv {} release_assets/ \;
-          echo "Files to release:"
-          ls -lh release_assets/
+      - name: Display Files
+        run: ls -lh release_assets/
 
-      - name: Create Release
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.inputs.release_tag || github.ref_name }}
           name: "Release ${{ github.event.inputs.release_tag || github.ref_name }}"
           body: |
-            ## 多平台构建版本
+            ## 🚀 多平台构建版本
             **构建时间:** ${{ needs.build.outputs.build_time }}
 
-            ✅ 所有 Linux 版本兼容 Ubuntu 18.04.6 LTS  
-            ✅ 使用纯 Go 静态编译 (CGO_DISABLED)
+            ✅ 所有 Linux 版本可在 **Ubuntu 18.04.6 LTS** 及以上运行  
+            ✅ 使用纯 Go 静态编译 (CGO_DISABLED=0)  
+            ✅ 自动生成 SHA256 校验文件  
+            ✅ 同时打包 zip / tar.gz  
 
-            完整变更日志:  
+            完整变更日志：  
             https://github.com/${{ github.repository }}/commits/${{ github.event.inputs.release_tag || github.ref_name }}
-          files: |
-            ${{ github.workspace }}/release_assets/*
+          files: release_assets/*
           draft: false
           prerelease: ${{ contains(github.event.inputs.release_tag, '-rc') || contains(github.ref_name, '-rc') }}
           generate_release_notes: true
-          fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
