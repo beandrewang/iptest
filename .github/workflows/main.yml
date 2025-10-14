@@ -24,18 +24,19 @@ jobs:
         include:
           - goos: linux
             goarch: amd64
+            ext: ""
           - goos: linux
             goarch: arm64
-          - goos: linux
-            goarch: 386
+            ext: ""
           - goos: windows
             goarch: amd64
             ext: ".exe"
           - goos: darwin
             goarch: amd64
+            ext: ""
           - goos: darwin
             goarch: arm64
-          # 如需完整平台可恢复上个版本的 matrix
+            ext: ""
 
     outputs:
       build_time: ${{ steps.set-build-time.outputs.BUILD_TIME }}
@@ -43,17 +44,11 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Setup Go
         uses: actions/setup-go@v4
         with:
           go-version: "1.20"
-          cache: false
-
-      - name: Create Release Assets Directory
-        run: mkdir -p "${{ github.workspace }}/release_assets"
 
       - name: Set Build Time
         id: set-build-time
@@ -61,43 +56,29 @@ jobs:
           build_time=$(date -u +'%Y-%m-%d %H:%M:%S UTC')
           echo "BUILD_TIME=$build_time" >> $GITHUB_OUTPUT
 
-      - name: Build (Static Binary)
+      - name: Build binary
         run: |
-          echo "Building iptest-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext || '' }}..."
+          mkdir -p release_assets
+          echo "🔧 Building for ${{ matrix.goos }}/${{ matrix.goarch }}"
           CGO_ENABLED=0 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} \
           go build -trimpath -ldflags="-s -w" \
-          -o "${{ github.workspace }}/release_assets/iptest-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext || '' }}" iptest.go
-        shell: bash
+          -o release_assets/iptest-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} iptest.go
 
       - name: Generate SHA256
         run: |
-          cd "${{ github.workspace }}/release_assets"
+          cd release_assets
           for file in $(find . -type f ! -name '*.sha256'); do
             sha256sum "$file" | awk '{print $1}' > "${file}.sha256"
           done
-          echo "SHA256 files generated:"
-          ls -1 *.sha256
 
-      - name: Compress Artifacts
-        run: |
-          cd "${{ github.workspace }}/release_assets"
-          for file in $(find . -type f ! -name '*.sha256'); do
-            base=$(basename "$file")
-            if [[ "$base" == *.exe ]]; then
-              zip "${base%.exe}.zip" "$file"
-            else
-              tar -czf "${base}.tar.gz" "$file"
-            fi
-          done
-
-      - name: Upload All Artifacts
+      - name: Upload All Artifacts Once
         uses: actions/upload-artifact@v4
         with:
           name: iptest-all-platforms
-          path: ${{ github.workspace }}/release_assets/*
+          path: release_assets/*
 
   release:
-    name: Publish to GitHub Releases
+    name: Publish to GitHub Release
     needs: build
     runs-on: ubuntu-latest
 
@@ -120,16 +101,15 @@ jobs:
             ## 🚀 多平台构建版本
             **构建时间:** ${{ needs.build.outputs.build_time }}
 
-            ✅ 所有 Linux 版本可在 **Ubuntu 18.04.6 LTS** 及以上运行  
+            ✅ 所有 Linux 版本兼容 Ubuntu 18.04 LTS  
             ✅ 使用纯 Go 静态编译 (CGO_DISABLED=0)  
             ✅ 自动生成 SHA256 校验文件  
-            ✅ 同时打包 zip / tar.gz  
+            ✅ 所有平台一次性发布
 
-            完整变更日志：  
+            完整变更日志:  
             https://github.com/${{ github.repository }}/commits/${{ github.event.inputs.release_tag || github.ref_name }}
-          files: release_assets/*
+          files: release_assets/**/*
           draft: false
           prerelease: ${{ contains(github.event.inputs.release_tag, '-rc') || contains(github.ref_name, '-rc') }}
-          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
