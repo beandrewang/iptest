@@ -1,4 +1,4 @@
-name: Build & Release All Platforms
+name: Build & Release for Ubuntu 18.04
 
 on:
   workflow_dispatch:
@@ -17,30 +17,10 @@ permissions:
 
 jobs:
   build:
+    name: Build Linux (Ubuntu 18.04 compatible)
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - goos: linux
-            goarch: amd64
-            ext: ""
-          - goos: linux
-            goarch: arm64
-            ext: ""
-          - goos: windows
-            goarch: amd64
-            ext: ".exe"
-          - goos: darwin
-            goarch: amd64
-            ext: ""
-          - goos: darwin
-            goarch: arm64
-            ext: ""
-
     outputs:
       build_time: ${{ steps.set-build-time.outputs.BUILD_TIME }}
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -56,40 +36,39 @@ jobs:
           build_time=$(date -u +'%Y-%m-%d %H:%M:%S UTC')
           echo "BUILD_TIME=$build_time" >> $GITHUB_OUTPUT
 
-      - name: Build binary
+      - name: Build static Linux binary
         run: |
           mkdir -p release_assets
-          echo "🔧 Building for ${{ matrix.goos }}/${{ matrix.goarch }}"
-          CGO_ENABLED=0 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} \
-          go build -trimpath -ldflags="-s -w" \
-          -o release_assets/iptest-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} iptest.go
+          echo "🔧 Building Linux amd64 binary"
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+          go build -trimpath -ldflags="-s -w" -o release_assets/iptest-linux-amd64 iptest.go
 
       - name: Generate SHA256
         run: |
           cd release_assets
-          for file in $(find . -type f ! -name '*.sha256'); do
-            sha256sum "$file" | awk '{print $1}' > "${file}.sha256"
+          for file in *; do
+            [ -f "$file" ] || continue
+            sha256sum "$file" | awk '{print $1}' > "$file.sha256"
           done
 
-      - name: Upload All Artifacts Once
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: iptest-all-platforms
+          name: iptest-linux-amd64
           path: release_assets/*
 
   release:
-    name: Publish to GitHub Release
+    name: Publish GitHub Release
     needs: build
     runs-on: ubuntu-latest
-
     steps:
-      - name: Download Artifacts
+      - name: Download artifact
         uses: actions/download-artifact@v4
         with:
-          name: iptest-all-platforms
+          name: iptest-linux-amd64
           path: release_assets
 
-      - name: Display Files
+      - name: Display files
         run: ls -lh release_assets/
 
       - name: Create GitHub Release
@@ -98,13 +77,11 @@ jobs:
           tag_name: ${{ github.event.inputs.release_tag || github.ref_name }}
           name: "Release ${{ github.event.inputs.release_tag || github.ref_name }}"
           body: |
-            ## 🚀 多平台构建版本
+            ## 🚀 Linux amd64 构建版本 (Ubuntu 18.04 LTS 兼容)
             **构建时间:** ${{ needs.build.outputs.build_time }}
 
-            ✅ 所有 Linux 版本兼容 Ubuntu 18.04 LTS  
-            ✅ 使用纯 Go 静态编译 (CGO_DISABLED=0)  
+            ✅ 静态编译，Ubuntu 18.04 LTS 可用  
             ✅ 自动生成 SHA256 校验文件  
-            ✅ 所有平台一次性发布
 
             完整变更日志:  
             https://github.com/${{ github.repository }}/commits/${{ github.event.inputs.release_tag || github.ref_name }}
