@@ -39,7 +39,7 @@ jobs:
       - name: Build static Linux binary
         run: |
           mkdir -p release_assets
-          echo "🔧 Building Linux amd64 binary"
+          echo "🔧 Building Linux amd64 binary for Ubuntu 18.04"
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
           go build -trimpath -ldflags="-s -w" -o release_assets/iptest-linux-amd64 iptest.go
 
