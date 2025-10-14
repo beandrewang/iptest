@@ -1,4 +1,5 @@
 name: Build All Platforms
+
 on:
   workflow_dispatch:
     inputs:
@@ -9,9 +10,11 @@ on:
   push:
     tags:
       - "v*"
+
 permissions:
   contents: write
   actions: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -93,36 +96,38 @@ jobs:
           - goos: windows
             goarch: arm64
             ext: ".exe"
-    outputs: # 添加作业输出
+
+    outputs:
       build_time: ${{ steps.set-build-time.outputs.BUILD_TIME }}
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # 获取完整提交历史
+          fetch-depth: 0
 
       - name: Setup Go
         uses: actions/setup-go@v4
         with:
-          go-version: "1.20" # 根据你的需求设置Go版本
+          go-version: "1.20"
           cache: false
 
       - name: Create Release Assets Directory
         run: mkdir -p "${{ github.workspace }}/release_assets"
 
       - name: Set Build Time
-        id: set-build-time # 给步骤设置ID
+        id: set-build-time
         run: |
           build_time=$(date -u +'%Y-%m-%d %H:%M:%S UTC')
           echo "BUILD_TIME=$build_time" >> $GITHUB_OUTPUT
 
-      - name: Build
+      - name: Build (Static Binary)
         run: |
-          echo "Building iptest-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext || '' }} from iptest.go..."
-          go build -o ${{ github.workspace }}/release_assets/iptest-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext || '' }} iptest.go
-        env:
-         GOARCH: ${{ matrix.goarch }}
-         GOOS: ${{ matrix.goos }} 
+          echo "Building iptest-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext || '' }} (static binary)..."
+          CGO_ENABLED=0 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} \
+          go build -trimpath -ldflags="-s -w" \
+          -o "${{ github.workspace }}/release_assets/iptest-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext || '' }}" iptest.go
+        shell: bash
 
       - name: Generate SHA256
         run: |
@@ -144,7 +149,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
+      - name: Download Artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
@@ -165,8 +170,11 @@ jobs:
             ## 多平台构建版本
             **构建时间:** ${{ needs.build.outputs.build_time }}
 
+            ✅ 所有 Linux 版本兼容 Ubuntu 18.04.6 LTS  
+            ✅ 使用纯 Go 静态编译 (CGO_DISABLED)
+
             完整变更日志:  
-            https://github.com/Kwisma/iptest/commits/${{ github.event.inputs.release_tag || github.ref_name }}
+            https://github.com/${{ github.repository }}/commits/${{ github.event.inputs.release_tag || github.ref_name }}
           files: |
             ${{ github.workspace }}/release_assets/*
           draft: false
