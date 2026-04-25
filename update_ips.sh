@@ -11,7 +11,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 # ========== 配置 ==========
-TOTAL_SAMPLES=${TOTAL_SAMPLES:-2000}
+TOTAL_SAMPLES=${TOTAL_SAMPLES:-500}
 MAX_CONCURRENCY=${MAX_CONCURRENCY:-200}
 DELAY_THRESHOLD=${DELAY_THRESHOLD:-300}
 SPEED_TEST_THREADS=${SPEED_TEST_THREADS:-30}
@@ -119,7 +119,7 @@ step3_latency_test() {
             -outfile "$TMP_RESULT_CSV" \
             -max "$MAX_CONCURRENCY" \
             -speedtest 0 \
-            -delay "$DELAY_THRESHOLD" 2>&1
+            -delay "$DELAY_THRESHOLD" 2>&1 | tr -d '\r' | sed 's/\x1b\[2J//g'
 
         if [ ! -f "$TMP_RESULT_CSV" ]; then
             err "延迟测试未生成结果"
@@ -197,23 +197,41 @@ step4_speed_test() {
     log "对 $total 个 IP 进行下载测速..."
     > "$TMP_SPEED_RESULT"
 
-    # 创建测速脚本
+    # 创建测速脚本（多一个参数记录进度）
     local worker="/tmp/speed_w_$$.sh"
+    local prog_file="/tmp/speed_prog_$$.txt"
+    > "$prog_file"
     cat > "$worker" << 'SCRIPT'
 #!/bin/bash
-ip=$1 port=$2 out=$3
+ip=$1 port=$2 out=$3 prog=$4
 s=$(curl -s -o /dev/null -w "%{speed_download}" --max-time 8 \
     --connect-to "cdnjs.cloudflare.com:${port}:${ip}:${port}" \
     "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" 2>/dev/null)
+echo "x" >> "$prog"
 [ -n "$s" ] && [ "$s" != "0" ] && echo "$ip $port $(echo scale=0\; $s/1024 | bc)" >> "$out"
 SCRIPT
     chmod +x "$worker"
 
-    # 用 xargs -P 并行执行（macOS 兼容）
-    awk -v out="$TMP_SPEED_RESULT" '{print $1, $2, out}' "$TMP_VALID_IPS" | \
-        xargs -P "$SPEED_TEST_THREADS" -n3 bash "$worker"
+    # 后台显示进度
+    (
+        while true; do
+            sleep 3
+            local done; done=$(wc -l < "$prog_file" 2>/dev/null || echo 0)
+            local succ; succ=$(wc -l < "$TMP_SPEED_RESULT" 2>/dev/null || echo 0)
+            printf "\r  [测速] %d/%d (成功 %d)" "$done" "$total" "$succ" >&2
+            [ "$done" -ge "$total" ] && break
+        done
+    ) &
+    local prog_pid=$!
 
-    rm -f "$worker"
+    # 用 xargs -P 并行执行（macOS 兼容）
+    awk -v out="$TMP_SPEED_RESULT" -v prog="$prog_file" \
+        '{print $1, $2, out, prog}' "$TMP_VALID_IPS" | \
+        xargs -P "$SPEED_TEST_THREADS" -n4 bash "$worker"
+
+    kill $prog_pid 2>/dev/null; wait $prog_pid 2>/dev/null
+    echo "" >&2
+    rm -f "$worker" "$prog_file"
 
     local tested; tested=$(wc -l < "$TMP_SPEED_RESULT" 2>/dev/null || echo 0)
     if [ "$tested" -eq 0 ]; then
@@ -235,9 +253,6 @@ step5_output_top() {
     TOP_N="$TOP_N" \
     node -e "$(cat << 'NODEOUT'
 const fs = require('fs');
-
-// 目标区域：亚太（香港、台湾、日本、韩国、新加坡）+ 美国
-const TARGET_FLAGS = new Set(['🇭🇰', '🇹🇼', '🇯🇵', '🇰🇷', '🇸🇬', '🇺🇸']);
 
 // 读取 CSV 位置数据
 const lookup = {};
@@ -266,15 +281,12 @@ const entries = speedLines.map(line => {
     const flag = d.flag || '';
     const city = d.city_zh || d.city || d.dc || '?';
     const region = d.dc || '';
-    // 亚太优先（香港/台湾/日本/韩国/新加坡 > 美国 > 其他）
-    let priority = 3;
-    if (TARGET_FLAGS.has(flag) && flag !== '🇺🇸') priority = 1;
-    else if (flag === '🇺🇸') priority = 2;
-    return { ip, port, speed: parseInt(speed), flag, city, region, key, isTarget: TARGET_FLAGS.has(flag), priority, data: d };
+    // 按速度降序排列
+    return { ip, port, speed: parseInt(speed), flag, city, region, data: d };
 });
 
-// 排序：优先级(亚太>美国>其他) → 速度降序
-entries.sort((a, b) => a.priority - b.priority || b.speed - a.speed);
+// 排序：按速度降序排列
+entries.sort((a, b) => b.speed - a.speed);
 
 const topN = parseInt(process.env.TOP_N) || 50;
 const selected = entries.slice(0, topN);
@@ -289,9 +301,8 @@ console.log('--- | ------------------- | ----- | ---------- | ------- | --------
 
 selected.forEach((e, i) => {
     const lat = e.data.latency || '?';
-    const marker = e.priority === 1 ? '★' : ' ';
     console.log(
-        marker + ('' + (i+1)).padStart(1) + ' | ' +
+        ' ' + ('' + (i+1)).padStart(1) + ' | ' +
         e.ip.padEnd(19) + ' | ' +
         e.port.padEnd(5) + ' | ' +
         ('' + e.speed).padStart(10) + ' | ' +
@@ -341,7 +352,14 @@ NODEOUT
     log "  CSV: $(pwd)/${OUTPUT_CSV}"
 }
 
+# ========== 清理 ==========
+cleanup() {
+    log "清理之前生成的中间文件..."
+    rm -f "$TMP_SAMPLE_IPS" "$TMP_RESULT_CSV" "$TMP_VALID_IPS" "$TMP_SPEED_RESULT" "$OUTPUT_FILE" "$OUTPUT_CSV"
+}
+
 # ========== 主流程 ==========
+cleanup
 CF_RANGES=$(step1_get_ranges)
 step2_generate_ips "$CF_RANGES"
 step3_latency_test
