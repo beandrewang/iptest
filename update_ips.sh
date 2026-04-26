@@ -22,8 +22,6 @@ WARP_CIDRS=("162.159.193.0/24" "162.159.197.0/24" "162.159.239.0/24")
 # 中间文件
 TMP_SAMPLE_IPS="ip_sample.txt"
 TMP_RESULT_CSV="result_raw.csv"
-TMP_VALID_IPS="ip_valid.txt"
-TMP_SPEED_RESULT="speed_result.txt"
 OUTPUT_FILE="top50_ips.txt"
 OUTPUT_CSV="top50_ips.csv"
 
@@ -42,7 +40,7 @@ check_locations() {
 
 # ========== 步骤 1 ==========
 step1_get_ranges() {
-    log "[1/5] 获取 Cloudflare IP 范围..."
+    log "[1/4] 获取 Cloudflare IP 范围..."
     local ranges
     ranges=$(curl -s --max-time 10 https://www.cloudflare.com/ips-v4) || {
         err "无法获取 Cloudflare IP 范围"
@@ -56,7 +54,7 @@ step1_get_ranges() {
 # ========== 步骤 2 ==========
 step2_generate_ips() {
     local ranges="$1"
-    log "[2/5] 生成 $TOTAL_SAMPLES 个采样 IP..."
+    log "[2/4] 生成 $TOTAL_SAMPLES 个采样 IP..."
 
     CF_RANGES="$ranges" TOTAL_SAMPLES="$TOTAL_SAMPLES" OUTFILE="$TMP_SAMPLE_IPS" \
     node -e "$(cat << 'NODE'
@@ -111,7 +109,7 @@ NODE
 # ========== 步骤 2b：从 FOFA 导入已知 IP ==========
 step2b_import_fofa() {
     local files=("hk.csv" "tw.csv")
-    log "[2b/5] 从 FOFA 导出文件导入 IP..."
+    log "[2b/4] 从 FOFA 导出文件导入 IP..."
     local count=0
     for f in "${files[@]}"; do
         if [ -f "$f" ]; then
@@ -134,7 +132,7 @@ step3_latency_test() {
     local orig_samples=$TOTAL_SAMPLES
 
     while [ $attempt -le $((max_retries + 1)) ]; do
-        log "[3/5] 延迟测试（阈值 ${DELAY_THRESHOLD}ms，并发 ${MAX_CONCURRENCY}）..."
+        log "[3/4] 延迟测试（阈值 ${DELAY_THRESHOLD}ms，并发 ${MAX_CONCURRENCY}）..."
 
         check_locations
 
@@ -142,8 +140,8 @@ step3_latency_test() {
             -file "$TMP_SAMPLE_IPS" \
             -outfile "$TMP_RESULT_CSV" \
             -max "$MAX_CONCURRENCY" \
-            -speedtest 0 \
-            -delay "$DELAY_THRESHOLD" 2>&1 | tr -d '\r' | sed 's/\x1b\[2J//g'
+            -speedtest "$SPEED_TEST_THREADS" \
+            -delay "$DELAY_THRESHOLD" 2>&1
 
         if [ ! -f "$TMP_RESULT_CSV" ]; then
             err "延迟测试未生成结果"
@@ -217,64 +215,10 @@ NODE
 }
 
 # ========== 步骤 4 ==========
-step4_speed_test() {
-    log "[4/5] 测速中（${SPEED_TEST_THREADS} 线程）..."
-
-    tail -n +2 "$TMP_RESULT_CSV" | awk -F',' '{print $1, $2}' > "$TMP_VALID_IPS"
-    local total; total=$(wc -l < "$TMP_VALID_IPS")
-    log "对 $total 个 IP 进行下载测速..."
-    > "$TMP_SPEED_RESULT"
-
-    # 创建测速脚本（多一个参数记录进度）
-    local worker="/tmp/speed_w_$$.sh"
-    local prog_file="/tmp/speed_prog_$$.txt"
-    > "$prog_file"
-    cat > "$worker" << 'SCRIPT'
-#!/bin/bash
-ip=$1 port=$2 out=$3 prog=$4
-s=$(curl -s -o /dev/null -w "%{speed_download}" --max-time 8 \
-    --connect-to "cdnjs.cloudflare.com:${port}:${ip}:${port}" \
-    "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" 2>/dev/null)
-echo "x" >> "$prog"
-[ -n "$s" ] && [ "$s" != "0" ] && echo "$ip $port $(echo scale=0\; $s/1024 | bc)" >> "$out"
-SCRIPT
-    chmod +x "$worker"
-
-    # 后台显示进度
-    (
-        while true; do
-            sleep 3
-            local done; done=$(wc -l < "$prog_file" 2>/dev/null || echo 0)
-            local succ; succ=$(wc -l < "$TMP_SPEED_RESULT" 2>/dev/null || echo 0)
-            printf "\r  [测速] %d/%d (成功 %d)" "$done" "$total" "$succ" >&2
-            [ "$done" -ge "$total" ] && break
-        done
-    ) &
-    local prog_pid=$!
-
-    # 用 xargs -P 并行执行（macOS 兼容）
-    awk -v out="$TMP_SPEED_RESULT" -v prog="$prog_file" \
-        '{print $1, $2, out, prog}' "$TMP_VALID_IPS" | \
-        xargs -P "$SPEED_TEST_THREADS" -n4 bash "$worker"
-
-    kill $prog_pid 2>/dev/null; wait $prog_pid 2>/dev/null
-    echo "" >&2
-    rm -f "$worker" "$prog_file"
-
-    local tested; tested=$(wc -l < "$TMP_SPEED_RESULT" 2>/dev/null || echo 0)
-    if [ "$tested" -eq 0 ]; then
-        err "测速全部失败"
-        exit 1
-    fi
-    log "测速完成，$tested 个 IP 有有效速度"
-}
-
-# ========== 步骤 5 ==========
 step5_output_top() {
-    log "[5/5] 筛选亚太区域 IP，生成结果..."
+    log "[4/4] 筛选并输出结果..."
 
     # 用 Node.js 过滤亚太区域并按速度排序，输出 Top N
-    TMP_SPEED_RESULT="$TMP_SPEED_RESULT" \
     TMP_RESULT_CSV="$TMP_RESULT_CSV" \
     OUTFILE="$OUTPUT_FILE" \
     OUTFILE_CSV="$OUTPUT_CSV" \
@@ -282,41 +226,21 @@ step5_output_top() {
     node -e "$(cat << 'NODEOUT'
 const fs = require('fs');
 
-// 读取 CSV 位置数据
-const lookup = {};
 const csvFile = process.env.TMP_RESULT_CSV;
-if (fs.existsSync(csvFile)) {
-    const lines = fs.readFileSync(csvFile, 'utf8').trim().split('\n').slice(1);
-    lines.forEach(line => {
-        const f = line.split(',');
-        if (f.length >= 12) lookup[f[0] + ':' + f[1]] = {
-            dc: f[3], region: f[5], city: f[6],
-            region_zh: f[7], country: f[8], city_zh: f[9],
-            flag: f[10], latency: f[11], tls: f[2]
-        };
-    });
-}
+const topN = parseInt(process.env.TOP_N) || 50;
 
-// 读取测速结果
-const speedLines = fs.readFileSync(process.env.TMP_SPEED_RESULT, 'utf8')
-    .trim().split('\n').filter(Boolean);
-
-// 解析并打标签
-const entries = speedLines.map(line => {
-    const [ip, port, speed] = line.split(/\s+/);
-    const key = ip + ':' + port;
-    const d = lookup[key] || {};
-    const flag = d.flag || '';
-    const city = d.city_zh || d.city || d.dc || '?';
-    const region = d.dc || '';
-    // 按速度降序排列
-    return { ip, port, speed: parseInt(speed), flag, city, region, data: d };
+const lines = fs.readFileSync(csvFile, 'utf8').trim().split('\n').slice(1);
+const entries = lines.map(line => {
+    const f = line.split(',');
+    const ip = f[0], port = f[1];
+    const speed = parseFloat(f[12]) || 0;
+    const flag = f[10] || '';
+    const city = f[9] || f[6] || f[3] || '?';
+    const latency = f[11] || '?';
+    return { ip, port, speed, flag, city, latency };
 });
 
-// 排序：按速度降序排列
 entries.sort((a, b) => b.speed - a.speed);
-
-const topN = parseInt(process.env.TOP_N) || 50;
 const selected = entries.slice(0, topN);
 
 console.log('');
@@ -328,13 +252,12 @@ console.log(' #  | IP地址              | 端口  | 速度(kB/s) | 延迟    | 
 console.log('--- | ------------------- | ----- | ---------- | ------- | ---------------');
 
 selected.forEach((e, i) => {
-    const lat = e.data.latency || '?';
     console.log(
         ' ' + ('' + (i+1)).padStart(1) + ' | ' +
         e.ip.padEnd(19) + ' | ' +
         e.port.padEnd(5) + ' | ' +
         ('' + e.speed).padStart(10) + ' | ' +
-        lat.padEnd(7) + ' | ' +
+        e.latency.padEnd(7) + ' | ' +
         e.flag + e.city
     );
 });
@@ -351,24 +274,18 @@ Object.entries(regions).sort((a, b) => b[1] - a[1]).forEach(([flag, count]) => {
     console.log('  ' + flag + ': ' + count + ' 个');
 });
 
-// 输出 TXT：ip:port#flagCity
+// 输出 TXT
 const simpleOutput = selected.map(e => {
     const tag = e.flag + e.city;
     return e.ip + ':' + e.port + (tag ? '#' + tag : '');
 }).join('\n');
 fs.writeFileSync(process.env.OUTFILE, simpleOutput);
 
-// 输出 CSV：IP地址,端口,回源端口,TLS,数据中心,地区,城市,TCP延迟(ms),速度(MB/s)
+// 输出 CSV
 const csvHeader = 'IP地址,端口,回源端口,TLS,数据中心,地区,城市,TCP延迟(ms),速度(MB/s)';
 const csvRows = selected.map(e => {
-    const d = e.data;
-    const region = d.region_zh || d.region || '';
-    const city = d.city_zh || d.city || '';
-    const dc = d.dc || '';
-    const tls = d.tls || 'true';
-    const latency = d.latency ? d.latency.replace(/\s*ms/, '') : '';
     const speedMB = (e.speed / 1024).toFixed(2);
-    return [e.ip, e.port, e.port, tls, dc, region, city, latency, speedMB].join(',');
+    return [e.ip, e.port, e.port, 'true', '', '', '', e.latency.replace(/\s*ms/, ''), speedMB].join(',');
 });
 fs.writeFileSync(process.env.OUTFILE_CSV, csvHeader + '\n' + csvRows.join('\n'));
 NODEOUT
@@ -383,7 +300,7 @@ NODEOUT
 # ========== 清理 ==========
 cleanup() {
     log "清理之前生成的中间文件..."
-    rm -f "$TMP_SAMPLE_IPS" "$TMP_RESULT_CSV" "$TMP_VALID_IPS" "$TMP_SPEED_RESULT" "$OUTPUT_FILE" "$OUTPUT_CSV"
+    rm -f "$TMP_SAMPLE_IPS" "$TMP_RESULT_CSV" "$OUTPUT_FILE" "$OUTPUT_CSV"
 }
 
 # ========== 主流程 ==========
@@ -392,5 +309,4 @@ CF_RANGES=$(step1_get_ranges)
 step2_generate_ips "$CF_RANGES"
 step2b_import_fofa
 step3_latency_test
-step4_speed_test
 step5_output_top

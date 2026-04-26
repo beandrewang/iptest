@@ -30,26 +30,26 @@ const (
 )
 
 var (
-	File         = flag.String("file", "ip.txt", "IP地址文件名称,格式为 ip port ,就是IP和端口之间用空格隔开")       // IP地址文件名称
-	outFile      = flag.String("outfile", "ip.csv", "输出文件名称")                                  // 输出文件名称
-	maxThreads   = flag.Int("max", 100, "并发请求最大协程数")                                           // 最大协程数
-	speedTest    = flag.Int("speedtest", 5, "下载测速协程数量,设为0禁用测速")                                // 下载测速协程数量
-	speedTestURL = flag.String("url", "speed.cloudflare.com/__down?bytes=500000000", "测速文件地址") // 测速文件地址
-	enableTLS    = flag.Bool("tls", true, "是否启用TLS")                                           // TLS是否启用
-	delay = flag.Int("delay", 0, "延迟阈值(ms)，默认为0禁用延迟过滤")                           // 默认0，禁用过滤
+	File         = flag.String("file", "ip.txt", "IP地址文件名称,格式为 ip port ,就是IP和端口之间用空格隔开")                     // IP地址文件名称
+	outFile      = flag.String("outfile", "ip.csv", "输出文件名称")                                                // 输出文件名称
+	maxThreads   = flag.Int("max", 100, "并发请求最大协程数")                                                         // 最大协程数
+	speedTest    = flag.Int("speedtest", 5, "下载测速协程数量,设为0禁用测速")                                              // 下载测速协程数量
+	speedTestURL = flag.String("url", "cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js", "测速文件地址") // 测速文件地址
+	enableTLS    = flag.Bool("tls", true, "是否启用TLS")                                                         // TLS是否启用
+	delay        = flag.Int("delay", 0, "延迟阈值(ms)，默认为0禁用延迟过滤")                                               // 默认0，禁用过滤
 )
 
 type result struct {
 	ip          string        // IP地址
 	port        int           // 端口
 	dataCenter  string        // 数据中心
-	locCode    string        // 源IP位置
+	locCode     string        // 源IP位置
 	region      string        // 地区
 	city        string        // 城市
-	region_zh      string        // 地区
-	country        string        // 国家
-	city_zh      string        // 城市
-	emoji      string        // 国旗
+	region_zh   string        // 地区
+	country     string        // 国家
+	city_zh     string        // 城市
+	emoji       string        // 国旗
 	latency     string        // 延迟
 	tcpDuration time.Duration // TCP请求延迟
 }
@@ -60,16 +60,16 @@ type speedtestresult struct {
 }
 
 type location struct {
-	Iata   string  `json:"iata"`
-	Lat    float64 `json:"lat"`
-	Lon    float64 `json:"lon"`
-	Cca2   string  `json:"cca2"`
-	Region string  `json:"region"`
-	City   string  `json:"city"`
+	Iata      string  `json:"iata"`
+	Lat       float64 `json:"lat"`
+	Lon       float64 `json:"lon"`
+	Cca2      string  `json:"cca2"`
+	Region    string  `json:"region"`
+	City      string  `json:"city"`
 	Region_zh string  `json:"region_zh"`
 	Country   string  `json:"country"`
-	City_zh string  `json:"city_zh"`
-	Emoji   string  `json:"emoji"`
+	City_zh   string  `json:"city_zh"`
+	Emoji     string  `json:"emoji"`
 }
 
 // 尝试提升文件描述符的上限
@@ -212,9 +212,9 @@ func main() {
 
 			tcpDuration := time.Since(start)
 			if *delay > 0 && tcpDuration.Milliseconds() > int64(*delay) {
-			    return // 超过延迟阈值直接返回（仅在delay>0时生效）
+				return // 超过延迟阈值直接返回（仅在delay>0时生效）
 			}
- 			
+
 			start = time.Now()
 
 			client := http.Client{
@@ -286,10 +286,8 @@ func main() {
 					// 记录通过延迟检查的有效IP
 					atomic.AddInt32(&validCount, 1)
 					if ok {
-						fmt.Printf("发现有效IP %s 端口 %d 位置信息 %s 延迟 %d 毫秒\n", ipAddr, port, loc.City_zh, tcpDuration.Milliseconds())
 						resultChan <- result{ipAddr, port, dataCenter, locCode, loc.Region, loc.City, loc.Region_zh, loc.Country, loc.City_zh, loc.Emoji, fmt.Sprintf("%d ms", tcpDuration.Milliseconds()), tcpDuration}
 					} else {
-						fmt.Printf("发现有效IP %s 端口 %d 位置信息未知 延迟 %d 毫秒\n", ipAddr, port, tcpDuration.Milliseconds())
 						resultChan <- result{ipAddr, port, dataCenter, locCode, "", "", "", "", "", "", fmt.Sprintf("%d ms", tcpDuration.Milliseconds()), tcpDuration}
 					}
 				}
@@ -308,7 +306,7 @@ func main() {
 	}
 	var results []speedtestresult
 	if *speedTest > 0 {
-	    fmt.Printf("找到符合条件的ip 共%d个\n", atomic.LoadInt32(&validCount))
+		fmt.Printf("找到符合条件的ip 共%d个\n", atomic.LoadInt32(&validCount))
 		fmt.Printf("开始测速\n")
 		var wg2 sync.WaitGroup
 		wg2.Add(*speedTest)
@@ -376,7 +374,6 @@ func main() {
 
 	writer.Flush()
 	// 清除输出内容
-	fmt.Print("\033[2J")
 	fmt.Printf("有效IP数量: %d | 成功将结果写入文件 %s，耗时 %d秒\n", atomic.LoadInt32(&validCount), *outFile, time.Since(startTime)/time.Second)
 }
 
@@ -445,7 +442,6 @@ func getDownloadSpeed(ip string, port int) float64 {
 	}
 	defer conn.Close()
 
-	fmt.Printf("正在测试IP %s 端口 %d\n", ip, port)
 	startTime := time.Now()
 	// 创建HTTP客户端
 	client := http.Client{
@@ -461,7 +457,6 @@ func getDownloadSpeed(ip string, port int) float64 {
 	req.Close = true
 	resp, err := client.Do(req)
 	if err != nil {
-		fmt.Printf("IP %s 端口 %d 测速无效\n", ip, port)
 		return 0
 	}
 	defer resp.Body.Close()
@@ -472,6 +467,5 @@ func getDownloadSpeed(ip string, port int) float64 {
 	speed := float64(written) / duration.Seconds() / 1024
 
 	// 输出结果
-	fmt.Printf("IP %s 端口 %d 下载速度 %.0f kB/s\n", ip, port, speed)
 	return speed
 }
