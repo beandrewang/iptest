@@ -11,12 +11,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 # ========== 配置 ==========
-TOTAL_SAMPLES=${TOTAL_SAMPLES:-500}
+TOTAL_SAMPLES=${TOTAL_SAMPLES:-3000}
 MAX_CONCURRENCY=${MAX_CONCURRENCY:-200}
 DELAY_THRESHOLD=${DELAY_THRESHOLD:-300}
 SPEED_TEST_THREADS=${SPEED_TEST_THREADS:-30}
 TOP_N=${TOP_N:-50}
 COMMON_PORTS=(443 2053 2083 2087 2096 8443)
+WARP_CIDRS=("162.159.193.0/24" "162.159.197.0/24" "162.159.239.0/24")
 
 # 中间文件
 TMP_SAMPLE_IPS="ip_sample.txt"
@@ -60,6 +61,8 @@ step2_generate_ips() {
     CF_RANGES="$ranges" TOTAL_SAMPLES="$TOTAL_SAMPLES" OUTFILE="$TMP_SAMPLE_IPS" \
     node -e "$(cat << 'NODE'
 const ranges = (process.env.CF_RANGES || '').split('\n').filter(Boolean);
+const WARP = ['162.159.193.0/24', '162.159.197.0/24', '162.159.239.0/24'];
+const allRanges = ranges.concat(WARP);
 const PORTS = [443, 2053, 2083, 2087, 2096, 8443];
 const TOTAL = +process.env.TOTAL_SAMPLES;
 const OUTFILE = process.env.OUTFILE;
@@ -77,9 +80,9 @@ let seed = Date.now() & 0xFFFFFFFF;
 const rand = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 0xFFFFFFFF; };
 
 const ips = new Set();
-const perRange = Math.ceil(TOTAL / ranges.length);
+const perRange = Math.ceil(TOTAL / allRanges.length);
 
-for (const cidr of ranges) {
+for (const cidr of allRanges) {
     const { start, end } = cidrRange(cidr);
     const limit = Math.min(perRange, end - start);
     for (let i = 0; i < limit; i++) {
@@ -102,6 +105,27 @@ NODE
         err "IP 生成失败"
         exit 1
     }
+    echo "" >> "$TMP_SAMPLE_IPS"
+}
+
+# ========== 步骤 2b：从 FOFA 导入已知 IP ==========
+step2b_import_fofa() {
+    local files=("hk.csv" "tw.csv")
+    log "[2b/5] 从 FOFA 导出文件导入 IP..."
+    local count=0
+    for f in "${files[@]}"; do
+        if [ -f "$f" ]; then
+            # 解析 CSV：第2列=IP，第3列=端口，跳过表头
+            tail -n +2 "$f" | awk -F',' '$2!="" && $3!="" {print $2, $3}' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' >> "$TMP_SAMPLE_IPS"
+            local n; n=$(tail -n +2 "$f" | awk -F',' '$2!="" && $3!="" {print $2, $3}' | grep -cE '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+')
+            log "  从 $f 导入 $n 个 IP"
+            count=$((count + n))
+        else
+            log "  $f 不存在，跳过"
+        fi
+    done
+    local total; total=$(wc -l < "$TMP_SAMPLE_IPS")
+    log "导入完成，共 $count 个，总采样 $total 个 IP:port 对"
 }
 
 # ========== 步骤 3 ==========
@@ -123,9 +147,10 @@ step3_latency_test() {
 
         if [ ! -f "$TMP_RESULT_CSV" ]; then
             err "延迟测试未生成结果"
-            exit 1
+            count=0
+        else
+            local count; count=$(tail -n +2 "$TMP_RESULT_CSV" | wc -l | tr -d ' ')
         fi
-        local count; count=$(tail -n +2 "$TMP_RESULT_CSV" | wc -l | tr -d ' ')
         if [ "$count" -gt 0 ]; then
             log "发现 $count 个有效 IP"
             return 0
@@ -138,6 +163,8 @@ step3_latency_test() {
             CF_RANGES="$CF_RANGES" TOTAL_SAMPLES="$TOTAL_SAMPLES" OUTFILE="$TMP_SAMPLE_IPS" \
             node -e "$(cat << 'NODE')
 const ranges = (process.env.CF_RANGES || '').split('\n').filter(Boolean);
+const WARP = ['162.159.193.0/24', '162.159.197.0/24', '162.159.239.0/24'];
+const allRanges = ranges.concat(WARP);
 const PORTS = [443, 2053, 2083, 2087, 2096, 8443];
 const TOTAL = +process.env.TOTAL_SAMPLES;
 const OUTFILE = process.env.OUTFILE;
@@ -155,9 +182,9 @@ let seed = Date.now() & 0xFFFFFFFF;
 const rand = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 0xFFFFFFFF; };
 
 const ips = new Set();
-const perRange = Math.ceil(TOTAL / ranges.length);
+const perRange = Math.ceil(TOTAL / allRanges.length);
 
-for (const cidr of ranges) {
+for (const cidr of allRanges) {
     const { start, end } = cidrRange(cidr);
     const limit = Math.min(perRange, end - start);
     for (let i = 0; i < limit; i++) {
@@ -180,6 +207,7 @@ NODE
                 err "IP 重新生成失败"
                 exit 1
             }
+            echo "" >> "$TMP_SAMPLE_IPS"
         fi
         attempt=$((attempt + 1))
     done
@@ -362,6 +390,7 @@ cleanup() {
 cleanup
 CF_RANGES=$(step1_get_ranges)
 step2_generate_ips "$CF_RANGES"
+step2b_import_fofa
 step3_latency_test
 step4_speed_test
 step5_output_top
