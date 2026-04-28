@@ -241,7 +241,17 @@ const entries = lines.map(line => {
 });
 
 entries.sort((a, b) => b.speed - a.speed);
-const selected = entries.slice(0, topN);
+
+// 按 IP 去重，每个 IP 只保留速度最快的端口
+const seen = new Set();
+const unique = [];
+for (const e of entries) {
+    if (!seen.has(e.ip)) {
+        seen.add(e.ip);
+        unique.push(e);
+    }
+}
+const selected = unique.slice(0, topN);
 
 console.log('');
 console.log('==========================================');
