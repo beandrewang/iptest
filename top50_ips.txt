@@ -1,3 +1,11 @@
+
+125.228.236.138:443#🇹🇼台北 Data Communication Business Group
+154.12.191.211:443#🇯🇵东京 DMIT Cloud Services
+18.183.224.152:443#🇯🇵东京 Amazon.com, Inc
+104.26.15.99:8443#🇭🇰香港 Cloudflare, Inc
+172.67.73.233:2083#🇭🇰香港 Cloudflare, Inc
+172.67.71.115:443#🇭🇰香港 Cloudflare, Inc
+104.26.8.253:2087#🇭🇰香港 Cloudflare, Inc
 123.111.169.70:443#🇰🇷首尔 SK Broadband Co Ltd
 45.129.8.3:443#🇯🇵东京 xTom Japan Corporation
 104.17.129.200:2053#🇺🇸圣何塞 Cloudflare, Inc
