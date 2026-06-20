@@ -12,3 +12,7 @@
 160.191.40.158:443#🇯🇵东京 BACK WAVES LIMITED
 45.142.126.238:443#🇯🇵东京 xTom Japan Corporation
 147.79.20.197:443#🇯🇵东京 ByteVirt LLC
+45.142.127.194#🇯🇵东京 xTom Japan Corporation
+45.142.126.238#🇯🇵东京 xTom Japan Corporation
+103.117.103.29#🇯🇵东京 DMIT Cloud Services
+154.36.176.84#🇯🇵东京 NetLab Global
