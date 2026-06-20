@@ -1,4 +1,10 @@
-
+18.183.224.152:443#🇯🇵东京 Amazon.com, Inc
+156.231.113.204:443#🇯🇵东京 AkileCloud Network
+158.51.110.12:443#🇯🇵东京 DDPS Networks, LLC
+207.148.108.85:443#🇯🇵东京 The Constant Company, LLC
+141.11.139.221:443#🇯🇵东京 ByteVirt LLC
+45.76.208.253:443#🇯🇵东京 The Constant Company, LLC
+154.12.191.211:443#🇯🇵东京 DMIT Cloud Services
 125.228.236.138:443#🇹🇼台北 Data Communication Business Group
 123.111.169.70:443#🇰🇷首尔 SK Broadband Co Ltd
 45.129.8.3:443#🇯🇵东京 xTom Japan Corporation
