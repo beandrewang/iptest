@@ -1,18 +1,15 @@
-123.111.169.70:443#🇰🇷首尔 SK Broadband Co Ltd
 45.129.8.3:443#🇯🇵东京 xTom Japan Corporation
-150.230.212.247:443#🇯🇵东京 Oracle Corporation
+45.142.127.194#🇯🇵东京 xTom Japan Corporation
+45.142.126.238:443#🇯🇵东京 xTom Japan Corporation
 45.76.208.253:443#🇯🇵东京 The Constant Company, LLC
-161.33.197.118:443#🇯🇵东京 Oracle Corporation
-153.121.45.101:443#🇯🇵东京 SAKURA Internet Inc
-141.147.174.243:443#🇯🇵东京 Oracle Corporation
+103.117.103.29:443#🇯🇵东京 DMIT Cloud Services
 126.220.82.161:443#🇯🇵大阪 SoftBank Corp
+141.147.174.243:443#🇯🇵东京 Oracle Corporation
+147.79.20.197:443#🇯🇵东京 ByteVirt LLC
+150.230.212.247:443#🇯🇵东京 Oracle Corporation
+153.121.45.101:443#🇯🇵东京 SAKURA Internet Inc
 154.19.186.207:443#🇯🇵东京 Silicon Cloud Global
 154.19.187.39:443#🇯🇵东京 Silicon Cloud Global
 154.36.176.84:443#🇯🇵东京 NetLab Global
 160.191.40.158:443#🇯🇵东京 BACK WAVES LIMITED
-45.142.126.238:443#🇯🇵东京 xTom Japan Corporation
-147.79.20.197:443#🇯🇵东京 ByteVirt LLC
-45.142.127.194:443#🇯🇵东京 xTom Japan Corporation
-45.142.126.238:443#🇯🇵东京 xTom Japan Corporation
-103.117.103.29:443#🇯🇵东京 DMIT Cloud Services
-154.36.176.84:443#🇯🇵东京 NetLab Global
+161.33.197.118:443#🇯🇵东京 Oracle Corporation
