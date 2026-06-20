@@ -13,3 +13,4 @@
 154.36.176.84:443#🇯🇵东京 NetLab Global
 160.191.40.158:443#🇯🇵东京 BACK WAVES LIMITED
 161.33.197.118:443#🇯🇵东京 Oracle Corporation
+104.28.241.251:443#🇨🇳中国 Cloudflare
