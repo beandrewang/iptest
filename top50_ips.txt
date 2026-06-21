@@ -2,7 +2,12 @@
 45.142.127.194#🇯🇵东京 xTom Japan Corporation
 45.142.126.238:443#🇯🇵东京 xTom Japan Corporation
 45.76.208.253:443#🇯🇵东京 The Constant Company, LLC
+45.76.102.47:443#🇯🇵东京  The Constant Company, LLC
+45.143.233.218:443#🇯🇵东京 xTom Japan Corporation
+45.251.240.205:443#🇯🇵大阪 xTom Japan Corporation
+92.113.142.47:443#🇯🇵东京 IDC Cube
 103.117.103.29:443#🇯🇵东京 DMIT Cloud Services
+103.47.186.4:443#🇯🇵东京 xTom Japan Corporation
 126.220.82.161:443#🇯🇵大阪 SoftBank Corp
 141.147.174.243:443#🇯🇵东京 Oracle Corporation
 147.79.20.197:443#🇯🇵东京 ByteVirt LLC
@@ -11,5 +16,7 @@
 154.19.186.207:443#🇯🇵东京 Silicon Cloud Global
 154.19.187.39:443#🇯🇵东京 Silicon Cloud Global
 154.36.176.84:443#🇯🇵东京 NetLab Global
+154.83.93.180:443#🇯🇵东京 AkileCloud Network
 160.191.40.158:443#🇯🇵东京 BACK WAVES LIMITED
 161.33.197.118:443#🇯🇵东京 Oracle Corporation
+202.144.195.97:443#🇯🇵东京 IPTELECOM ASIA
