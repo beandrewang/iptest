@@ -13,7 +13,7 @@ cd "$SCRIPT_DIR"
 # ========== 配置 ==========
 TOTAL_SAMPLES=${TOTAL_SAMPLES:-3000}
 MAX_CONCURRENCY=${MAX_CONCURRENCY:-1000}
-DELAY_THRESHOLD=${DELAY_THRESHOLD:-150}
+DELAY_THRESHOLD=${DELAY_THRESHOLD:-200}
 SPEED_TEST_THREADS=${SPEED_TEST_THREADS:-30}
 TOP_N=${TOP_N:-50}
 COMMON_PORTS=(443 2053 2083 2087 2096 8443)
@@ -108,8 +108,8 @@ NODE
 
 # ========== 步骤 2b：从 FOFA 导入已知 IP ==========
 step2b_import_fofa() {
-    # local files=("hk.csv" "tw.csv" "jp.csv" "kr.csv")
-    local files=( "jp.csv")
+    local files=("hk.csv" "tw.csv" "jp.csv" "kr.csv")
+    # local files=( "jp.csv")
     log "[2b/4] 从 FOFA 导出文件导入 IP..."
     local count=0
     for f in "${files[@]}"; do
