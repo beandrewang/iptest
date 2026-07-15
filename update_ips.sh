@@ -108,8 +108,8 @@ NODE
 
 # ========== 步骤 2b：从 FOFA 导入已知 IP ==========
 step2b_import_fofa() {
-    local files=("hk.csv" "tw.csv" "jp.csv" "kr.csv")
-    # local files=( "jp.csv")
+    # local files=("hk.csv" "tw.csv" "jp.csv" "kr.csv")
+    local files=( "jp.csv")
     log "[2b/4] 从 FOFA 导出文件导入 IP..."
     local count=0
     for f in "${files[@]}"; do
